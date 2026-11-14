@@ -1,0 +1,11 @@
+[project]
+name = "realtime-recsys"
+version = "1.0.0"
+description = "Two-stage real-time recommendation engine: PyTorch two-tower retrieval, FAISS HNSW, LightGBM LambdaRank, FastAPI + Redis Streams"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]

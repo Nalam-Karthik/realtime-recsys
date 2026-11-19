@@ -1,0 +1,49 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 20
+
+  # One-shot offline job: downloads MovieLens, trains, writes a versioned artifact.
+  trainer:
+    build: .
+    command: sh -c "[ -f artifacts/LATEST ] || (./scripts/download_data.sh && python -m scripts.train)"
+    volumes: ["artifacts:/app/artifacts", "data:/app/data"]
+
+  api:
+    build: .
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      ARTIFACT_DIR: /app/artifacts
+    restart: unless-stopped
+    ports: ["${API_PORT:-8000}:8000"]
+    volumes: ["artifacts:/app/artifacts:ro"]
+    depends_on:
+      redis: {condition: service_healthy}
+      trainer: {condition: service_completed_successfully}
+
+  worker:
+    build: .
+    command: python -m worker.stream_consumer
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      EVENT_LOG: /app/data/events.jsonl
+    volumes: ["data:/app/data"]
+    deploy: {replicas: 2}
+    depends_on:
+      redis: {condition: service_healthy}
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    volumes: ["./prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    ports: ["${PROMETHEUS_PORT:-9090}:9090"]
+    depends_on: [api]
+
+volumes:
+  artifacts:
+  data:
